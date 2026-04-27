@@ -113,6 +113,59 @@ docker-compose down -v
 docker-compose ps
 ```
 
+## Default Dev Credentials
+
+| Resource | Username | Password |
+|----------|----------|----------|
+| Admin user (API) | `admin` | `Admin@123` (role=ADMIN, manually elevated) |
+| RabbitMQ Management (:15672) | `admin` | `changeme` |
+| PostgreSQL (:5432) | `app_user` | `changeme` |
+| Redis | — | no password |
+
+> The admin user is **not** seeded by Flyway. Register once via `POST /api/auth/register`, then run:
+> ```bash
+> docker exec ecommerce-postgres psql -U app_user -d user_db \
+>   -c "UPDATE users SET role='ADMIN' WHERE username='admin';"
+> ```
+
+## Common Issues & Fixes
+
+### "No products found" / empty list despite data in DB
+The catalog service caches responses in Redis. If it started before seed data existed, an empty list is cached for 1 hour.
+
+```bash
+# Flush all Redis caches (dev only)
+docker exec ecommerce-redis redis-cli FLUSHALL
+
+# Verify data is actually in the DB
+docker exec ecommerce-postgres psql -U app_user -d catalog_db \
+  -c "SELECT COUNT(*) FROM products;"
+```
+
+**Permanent fix:** Flyway `V4__seed_products.sql` ensures data exists before the first request. Never skip the seed migration.
+
+### Frontend container stuck "unhealthy"
+Alpine `wget` cannot resolve `localhost`. The healthcheck must use `127.0.0.1` and the **container** port (80), not the host-mapped port (3000).
+```yaml
+# Correct healthcheck for the frontend container
+healthcheck:
+  test: ["CMD", "wget", "-qO-", "http://127.0.0.1"]
+```
+
+### PowerShell curl doesn't work
+PowerShell aliases `curl` to `Invoke-WebRequest`. For API testing, use Git Bash or:
+```powershell
+# PowerShell equivalent
+Invoke-RestMethod -Uri "http://localhost:8080/api/auth/login" `
+  -Method POST -ContentType "application/json" `
+  -Body '{"username":"admin","password":"Admin@123"}'
+```
+
+### Service registered in Eureka but returns 404
+The API Gateway routes all requests through `/api/{service-name}/...`. Verify the route prefix matches `application.yml` in the gateway. Check Eureka dashboard at http://localhost:8761 to confirm the service is registered with the correct application name.
+
+---
+
 ## Key Design Rules
 
 1. **No cross-DB queries** — services only query their own database
