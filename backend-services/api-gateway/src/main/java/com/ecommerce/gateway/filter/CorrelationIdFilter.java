@@ -1,0 +1,34 @@
+package com.ecommerce.gateway.filter;
+
+import org.springframework.core.annotation.Order;
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.server.WebFilter;
+import org.springframework.web.server.WebFilterChain;
+import reactor.core.publisher.Mono;
+
+import java.util.UUID;
+
+@Component
+@Order(0)
+public class CorrelationIdFilter implements WebFilter {
+
+    private static final String CORRELATION_ID_HEADER = "X-Correlation-ID";
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+        String correlationId = exchange.getRequest().getHeaders().getFirst(CORRELATION_ID_HEADER);
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = UUID.randomUUID().toString();
+        }
+
+        final String finalCorrelationId = correlationId;
+        ServerHttpRequest mutated = exchange.getRequest().mutate()
+            .header(CORRELATION_ID_HEADER, finalCorrelationId)
+            .build();
+
+        return chain.filter(exchange.mutate().request(mutated).build())
+            .contextWrite(ctx -> ctx.put(CORRELATION_ID_HEADER, finalCorrelationId));
+    }
+}

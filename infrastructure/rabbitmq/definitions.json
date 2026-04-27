@@ -1,0 +1,129 @@
+{
+  "vhosts": [{ "name": "/" }],
+  "exchanges": [
+    {
+      "name": "orders.exchange",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false
+    },
+    {
+      "name": "orders.dlx",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false
+    }
+  ],
+  "queues": [
+    {
+      "name": "order.created.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "orders.dlx",
+        "x-dead-letter-routing-key": "order.created.dead",
+        "x-message-ttl": 300000
+      }
+    },
+    {
+      "name": "order.confirmed.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "orders.dlx"
+      }
+    },
+    {
+      "name": "order.cancelled.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false
+    },
+    {
+      "name": "order.shipped.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false
+    },
+    {
+      "name": "order.failed.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false
+    },
+    {
+      "name": "order.created.dead.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false
+    },
+    {
+      "name": "notification.email.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false
+    }
+  ],
+  "bindings": [
+    {
+      "source": "orders.exchange",
+      "vhost": "/",
+      "destination": "order.created.queue",
+      "destination_type": "queue",
+      "routing_key": "order.created"
+    },
+    {
+      "source": "orders.exchange",
+      "vhost": "/",
+      "destination": "order.confirmed.queue",
+      "destination_type": "queue",
+      "routing_key": "order.confirmed"
+    },
+    {
+      "source": "orders.exchange",
+      "vhost": "/",
+      "destination": "order.cancelled.queue",
+      "destination_type": "queue",
+      "routing_key": "order.cancelled"
+    },
+    {
+      "source": "orders.exchange",
+      "vhost": "/",
+      "destination": "order.shipped.queue",
+      "destination_type": "queue",
+      "routing_key": "order.shipped"
+    },
+    {
+      "source": "orders.exchange",
+      "vhost": "/",
+      "destination": "order.failed.queue",
+      "destination_type": "queue",
+      "routing_key": "order.failed"
+    },
+    {
+      "source": "orders.exchange",
+      "vhost": "/",
+      "destination": "notification.email.queue",
+      "destination_type": "queue",
+      "routing_key": "order.confirmed"
+    },
+    {
+      "source": "orders.exchange",
+      "vhost": "/",
+      "destination": "notification.email.queue",
+      "destination_type": "queue",
+      "routing_key": "order.shipped"
+    },
+    {
+      "source": "orders.dlx",
+      "vhost": "/",
+      "destination": "order.created.dead.queue",
+      "destination_type": "queue",
+      "routing_key": "order.created.dead"
+    }
+  ]
+}

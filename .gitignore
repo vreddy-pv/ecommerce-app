@@ -1,0 +1,31 @@
+# Secrets — never commit
+.env
+
+# Java build artifacts
+**/target/
+**/.mvn/wrapper/maven-wrapper.jar
+**/mvnw
+**/*.class
+
+# IDE
+**/.idea/
+**/*.iml
+**/.vscode/
+
+# Node / Frontend
+**/node_modules/
+**/dist/
+**/.angular/
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/venv/
+
+# Docker volumes (if mapped locally)
+**/pgdata/
+**/redisdata/
+
+# Logs
+**/*.log

@@ -1,0 +1,486 @@
+
+version: "3.9"
+
+# All services communicate over a single bridge network.
+# Service names act as DNS hostnames inside the network.
+networks:
+  ecommerce-network:
+    driver: bridge
+    name: ecommerce-network
+
+volumes:
+  postgres-data:
+  redis-data:
+  rabbitmq-data:
+
+# ─────────────────────────────────────────────────────────────────────────────
+# INFRASTRUCTURE LAYER
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+
+  # ── PostgreSQL (single instance, multiple databases via init script) ───────
+  postgres:
+    image: postgres:16-alpine
+    container_name: ecommerce-postgres
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-app_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-app_user} -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── Redis (3 logical databases: 0=session, 1=object-cache, 2=rate-limit) ──
+  redis:
+    image: redis:7-alpine
+    container_name: ecommerce-redis
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "6379:6379"
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - redis-data:/data
+      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── RabbitMQ (message broker for order events) ────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: ecommerce-rabbitmq
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-changeme}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./infrastructure/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./infrastructure/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ── Nginx (HTTP Cache layer + static file serving) ─────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: ecommerce-nginx
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "80:80"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/cache:/var/cache/nginx
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SPRING CLOUD LAYER
+# ─────────────────────────────────────────────────────────────────────────────
+
+  # ── Discovery Service (Eureka Server) ─────────────────────────────────────
+  discovery-service:
+    build:
+      context: ./backend-services
+      dockerfile: discovery-service/Dockerfile
+    container_name: ecommerce-discovery
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "8761:8761"
+    environment:
+      EUREKA_HOSTNAME: discovery-service
+      SPRING_PROFILES_ACTIVE: docker
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── API Gateway (Spring Cloud Gateway) ────────────────────────────────────
+  api-gateway:
+    build:
+      context: ./backend-services
+      dockerfile: api-gateway/Dockerfile
+    container_name: ecommerce-gateway
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-changeme-internal-key}
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DOMAIN MICROSERVICES
+# ─────────────────────────────────────────────────────────────────────────────
+
+  # ── User Service ──────────────────────────────────────────────────────────
+  user-service:
+    build:
+      context: ./backend-services
+      dockerfile: user-service/Dockerfile
+    container_name: ecommerce-user
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/user_db
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-app_user}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-changeme}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-changeme-internal-key}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── Catalog Service ───────────────────────────────────────────────────────
+  catalog-service:
+    build:
+      context: ./backend-services
+      dockerfile: catalog-service/Dockerfile
+    container_name: ecommerce-catalog
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/catalog_db
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-app_user}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-changeme}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-changeme-internal-key}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── Inventory Service ─────────────────────────────────────────────────────
+  inventory-service:
+    build:
+      context: ./backend-services
+      dockerfile: inventory-service/Dockerfile
+    container_name: ecommerce-inventory
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/inventory_db
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-app_user}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-changeme}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-changeme-internal-key}
+      # Peer heartbeat targets
+      PEER_ORDER_SERVICE_URL: http://order-service:8085
+      PEER_ORDER_PROCESSING_URL: http://order-processing-service:8086
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── Order Service ─────────────────────────────────────────────────────────
+  order-service:
+    build:
+      context: ./backend-services
+      dockerfile: order-service/Dockerfile
+    container_name: ecommerce-order
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/orders_db
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-app_user}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-changeme}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-admin}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASS:-changeme}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-changeme-internal-key}
+      PEER_INVENTORY_URL: http://inventory-service:8084
+      PEER_ORDER_PROCESSING_URL: http://order-processing-service:8086
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── Order Processing Service ──────────────────────────────────────────────
+  order-processing-service:
+    build:
+      context: ./backend-services
+      dockerfile: order-processing-service/Dockerfile
+    container_name: ecommerce-order-processing
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "8086:8086"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/processing_db
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-app_user}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-changeme}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-admin}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASS:-changeme}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-changeme-internal-key}
+      INVENTORY_SERVICE_URL: http://inventory-service:8084
+      ORDER_SERVICE_URL: http://order-service:8085
+      PEER_INVENTORY_URL: http://inventory-service:8084
+      PEER_ORDER_URL: http://order-service:8085
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      inventory-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── Aggregator Service ────────────────────────────────────────────────────
+  aggregator-service:
+    build:
+      context: ./backend-services
+      dockerfile: aggregator-service/Dockerfile
+    container_name: ecommerce-aggregator
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-changeme-internal-key}
+      CATALOG_SERVICE_URL: http://catalog-service:8083
+      INVENTORY_SERVICE_URL: http://inventory-service:8084
+      ORDER_SERVICE_URL: http://order-service:8085
+      USER_SERVICE_URL: http://user-service:8082
+    depends_on:
+      redis:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+      inventory-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PYTHON SERVICES
+# ─────────────────────────────────────────────────────────────────────────────
+
+  # ── Notification Service ──────────────────────────────────────────────────
+  notification-service:
+    build:
+      context: ./python-services/notification-service
+      dockerfile: Dockerfile
+    container_name: ecommerce-notification
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "8087:8087"
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-changeme}
+      DATABASE_URL: postgresql+asyncpg://${DB_USERNAME:-app_user}:${DB_PASSWORD:-changeme}@postgres:5432/notification_db
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-changeme-internal-key}
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8087/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+
+  # ── MCP Server ────────────────────────────────────────────────────────────
+  mcp-server:
+    build:
+      context: ./python-services/mcp-server
+      dockerfile: Dockerfile
+    container_name: ecommerce-mcp
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "8090:8090"
+    environment:
+      GATEWAY_URL: http://api-gateway:8080
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-changeme-internal-key}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8090/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FRONTEND
+# ─────────────────────────────────────────────────────────────────────────────
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ecommerce-frontend
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "3000:80"
+    environment:
+      REACT_APP_API_BASE_URL: http://localhost:80/api
+    depends_on:
+      - nginx
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DEV TOOLS (optional, remove for production)
+# ─────────────────────────────────────────────────────────────────────────────
+
+  # ── MailHog (catches outbound emails in dev) ──────────────────────────────
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: ecommerce-mailhog
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI

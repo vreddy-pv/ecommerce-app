@@ -1,0 +1,47 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: aggregator-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: 0
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+clients:
+  catalog-service: ${CLIENT_CATALOG_SERVICE_URL:http://catalog-service:8083}
+  inventory-service: ${CLIENT_INVENTORY_SERVICE_URL:http://inventory-service:8084}
+  order-service: ${CLIENT_ORDER_SERVICE_URL:http://order-service:8085}
+  user-service: ${CLIENT_USER_SERVICE_URL:http://user-service:8082}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
