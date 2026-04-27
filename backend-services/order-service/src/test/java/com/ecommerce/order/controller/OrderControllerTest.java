@@ -58,13 +58,14 @@ class OrderControllerTest {
 
     @Test
     void createOrderReturns202OnSuccess() throws Exception {
-        when(orderService.createOrder(any(), any())).thenReturn(sampleOrderDto());
+        when(orderService.createOrder(anyLong(), any(), any())).thenReturn(sampleOrderDto());
 
-        var req = new CreateOrderRequest(42L,
+        var req = new CreateOrderRequest(
             List.of(new CreateOrderRequest.LineItem(100L, 2, new BigDecimal("29.99"))));
 
         mockMvc.perform(post("/api/orders")
                 .header("Idempotency-Key", "key-001")
+                .header("X-User-Id", "42")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(req)))
             .andExpect(status().isAccepted())
@@ -75,15 +76,16 @@ class OrderControllerTest {
     void createOrderReturns400WhenItemsEmpty() throws Exception {
         mockMvc.perform(post("/api/orders")
                 .header("Idempotency-Key", "key-002")
+                .header("X-User-Id", "42")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"userId":1,"items":[]}
+                    {"items":[]}
                     """))
             .andExpect(status().isBadRequest());
     }
 
     @Test
-    void createOrderReturns400WhenUserIdMissing() throws Exception {
+    void createOrderReturns400WhenUserIdHeaderMissing() throws Exception {
         mockMvc.perform(post("/api/orders")
                 .header("Idempotency-Key", "key-003")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -118,7 +120,7 @@ class OrderControllerTest {
     void getUserOrdersReturns200() throws Exception {
         when(orderService.getOrdersByUser(42L)).thenReturn(List.of(sampleOrderDto()));
 
-        mockMvc.perform(get("/api/orders").param("userId", "42"))
+        mockMvc.perform(get("/api/orders").header("X-User-Id", "42"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data[0].userId").value(42));
     }

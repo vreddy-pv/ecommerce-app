@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -28,6 +30,11 @@ public class GlobalExceptionHandler {
             .map(FieldError::getDefaultMessage)
             .collect(Collectors.joining(", "));
         return ResponseEntity.badRequest().body(ApiResponse.error(message, "VALIDATION_FAILED"));
+    }
+
+    @ExceptionHandler({MissingRequestHeaderException.class, MissingServletRequestParameterException.class})
+    public ResponseEntity<ApiResponse<Void>> handleMissingInput(Exception ex) {
+        return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage(), "MISSING_REQUIRED_INPUT"));
     }
 
     @ExceptionHandler(Exception.class)

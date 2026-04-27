@@ -40,11 +40,11 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderDto createOrder(String idempotencyKey, CreateOrderRequest req) {
+    public OrderDto createOrder(Long userId, String idempotencyKey, CreateOrderRequest req) {
         return orderRepo.findByIdempotencyKey(idempotencyKey)
             .map(OrderDto::from)
             .orElseGet(() -> {
-                Order order = buildOrder(idempotencyKey, req);
+                Order order = buildOrder(userId, idempotencyKey, req);
                 order = orderRepo.save(order);
                 outboxRepo.save(outboxEvent(order, "order.created"));
                 return OrderDto.from(order);
@@ -67,13 +67,13 @@ public class OrderService {
         orderRepo.save(order);
     }
 
-    private Order buildOrder(String idempotencyKey, CreateOrderRequest req) {
+    private Order buildOrder(Long userId, String idempotencyKey, CreateOrderRequest req) {
         BigDecimal total = req.items().stream()
             .map(li -> li.unitPrice().multiply(BigDecimal.valueOf(li.quantity())))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         Order order = Order.builder()
-            .userId(req.userId())
+            .userId(userId)
             .idempotencyKey(idempotencyKey)
             .status(OrderStatus.PENDING)
             .totalAmount(total)

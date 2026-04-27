@@ -25,15 +25,17 @@ public class OrderController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<OrderDto>>> getUserOrders(@RequestParam Long userId) {
+    public ResponseEntity<ApiResponse<List<OrderDto>>> getUserOrders(
+            @RequestHeader("X-User-Id") Long userId) {
         return ResponseEntity.ok(ApiResponse.ok(orderService.getOrdersByUser(userId)));
     }
 
     @PostMapping
     public ResponseEntity<ApiResponse<OrderDto>> createOrder(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestHeader("X-User-Id") Long userId,
             @RequestBody @Valid CreateOrderRequest req) {
-        OrderDto order = orderService.createOrder(idempotencyKey, req);
+        OrderDto order = orderService.createOrder(userId, idempotencyKey, req);
         return ResponseEntity.status(HttpStatus.ACCEPTED)
             .body(ApiResponse.ok(order));
     }

@@ -42,7 +42,6 @@ class OrderServiceTest {
 
     private CreateOrderRequest sampleRequest() {
         return new CreateOrderRequest(
-            42L,
             List.of(new CreateOrderRequest.LineItem(100L, 2, new BigDecimal("29.99")))
         );
     }
@@ -64,7 +63,7 @@ class OrderServiceTest {
         });
         when(outboxRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        OrderDto result = orderService.createOrder("key-001", sampleRequest());
+        OrderDto result = orderService.createOrder(42L, "key-001", sampleRequest());
 
         assertThat(result.status()).isEqualTo(OrderStatus.PENDING);
         assertThat(result.userId()).isEqualTo(42L);
@@ -81,7 +80,7 @@ class OrderServiceTest {
             .build();
         when(orderRepo.findByIdempotencyKey("key-001")).thenReturn(Optional.of(existing));
 
-        OrderDto result = orderService.createOrder("key-001", sampleRequest());
+        OrderDto result = orderService.createOrder(42L, "key-001", sampleRequest());
 
         assertThat(result.id()).isEqualTo(5L);
         verify(orderRepo, never()).save(any());
@@ -94,12 +93,12 @@ class OrderServiceTest {
         when(orderRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(outboxRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        var req = new CreateOrderRequest(1L, List.of(
+        var req = new CreateOrderRequest(List.of(
             new CreateOrderRequest.LineItem(100L, 3, new BigDecimal("10.00")),
             new CreateOrderRequest.LineItem(200L, 1, new BigDecimal("25.00"))
         ));
 
-        OrderDto result = orderService.createOrder("key-002", req);
+        OrderDto result = orderService.createOrder(1L, "key-002", req);
 
         assertThat(result.totalAmount()).isEqualByComparingTo("55.00");
     }
@@ -197,7 +196,7 @@ class OrderServiceTest {
         });
         when(outboxRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        orderService.createOrder("key-x", sampleRequest());
+        orderService.createOrder(42L, "key-x", sampleRequest());
 
         ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
         verify(outboxRepo).save(captor.capture());
