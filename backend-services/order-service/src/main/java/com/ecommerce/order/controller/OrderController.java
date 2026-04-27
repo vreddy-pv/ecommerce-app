@@ -3,6 +3,7 @@ package com.ecommerce.order.controller;
 import com.ecommerce.common.dto.ApiResponse;
 import com.ecommerce.order.dto.CreateOrderRequest;
 import com.ecommerce.order.dto.OrderDto;
+import com.ecommerce.order.dto.OrderSummaryDto;
 import com.ecommerce.order.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -43,5 +44,19 @@ public class OrderController {
     @PutMapping("/{id}/cancel")
     public ResponseEntity<ApiResponse<OrderDto>> cancelOrder(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(orderService.cancelOrder(id)));
+    }
+
+    // ── Admin / MCP endpoints (no user context required) ─────────────────────
+
+    @GetMapping("/admin/summary")
+    public ResponseEntity<ApiResponse<OrderSummaryDto>> getOrderSummary(
+            @RequestParam(defaultValue = "7d") String period) {
+        return ResponseEntity.ok(ApiResponse.ok(orderService.getOrderSummary(period)));
+    }
+
+    @GetMapping("/admin/search")
+    public ResponseEntity<ApiResponse<List<OrderDto>>> searchOrders(
+            @RequestParam(defaultValue = "") String q) {
+        return ResponseEntity.ok(ApiResponse.ok(orderService.searchOrders(q)));
     }
 }

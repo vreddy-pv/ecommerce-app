@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface InventoryItemRepository extends JpaRepository<InventoryItem, Long> {
@@ -16,4 +17,8 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, Lo
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT i FROM InventoryItem i WHERE i.productId = :productId")
     Optional<InventoryItem> findByProductIdForUpdate(@Param("productId") Long productId);
+
+    /** Items where available qty (quantity − reservedQuantity) ≤ reorderThreshold. */
+    @Query("SELECT i FROM InventoryItem i WHERE (i.quantity - i.reservedQuantity) <= i.reorderThreshold")
+    List<InventoryItem> findLowStockItems();
 }

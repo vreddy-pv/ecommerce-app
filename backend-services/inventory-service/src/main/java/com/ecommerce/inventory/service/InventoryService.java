@@ -4,6 +4,7 @@ import com.ecommerce.common.exception.InsufficientInventoryException;
 import com.ecommerce.common.exception.ResourceNotFoundException;
 import com.ecommerce.inventory.domain.Reservation;
 import com.ecommerce.inventory.domain.ReservationStatus;
+import com.ecommerce.inventory.dto.LowInventoryAlertDto;
 import com.ecommerce.inventory.dto.ReserveRequest;
 import com.ecommerce.inventory.dto.StockDto;
 import com.ecommerce.inventory.repository.InventoryItemRepository;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -88,6 +90,17 @@ public class InventoryService {
             inventoryRepo.save(item);
             reservationRepo.save(reservation);
         }
+    }
+
+    public List<LowInventoryAlertDto> getLowInventoryAlerts() {
+        return inventoryRepo.findLowStockItems().stream()
+            .map(i -> new LowInventoryAlertDto(
+                i.getProductId(),
+                i.getQuantity(),
+                i.getReservedQuantity(),
+                i.getQuantity() - i.getReservedQuantity(),
+                i.getReorderThreshold()))
+            .toList();
     }
 
     @Transactional

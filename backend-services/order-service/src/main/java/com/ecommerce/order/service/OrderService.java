@@ -8,6 +8,7 @@ import com.ecommerce.order.domain.OrderItem;
 import com.ecommerce.order.domain.OutboxEvent;
 import com.ecommerce.order.dto.CreateOrderRequest;
 import com.ecommerce.order.dto.OrderDto;
+import com.ecommerce.order.dto.OrderSummaryDto;
 import com.ecommerce.order.repository.OrderRepository;
 import com.ecommerce.order.repository.OutboxEventRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,7 +18,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -104,6 +109,61 @@ public class OrderService {
             .eventType(eventType)
             .payload(payload)
             .build();
+    }
+
+    // ── Admin ─────────────────────────────────────────────────────────────────
+
+    public OrderSummaryDto getOrderSummary(String period) {
+        Instant since = switch (period.toLowerCase()) {
+            case "today" -> Instant.now().truncatedTo(ChronoUnit.DAYS);
+            case "30d"   -> Instant.now().minus(30, ChronoUnit.DAYS);
+            default      -> Instant.now().minus(7, ChronoUnit.DAYS);   // "7d"
+        };
+
+        List<Object[]> rows = orderRepo.getSummaryByStatus(since);
+        long totalOrders = 0;
+        BigDecimal totalRevenue = BigDecimal.ZERO;
+        Map<String, Long> byStatus = new LinkedHashMap<>();
+
+        for (Object[] row : rows) {
+            OrderStatus status = (OrderStatus) row[0];
+            long count  = ((Number) row[1]).longValue();
+            BigDecimal sum = row[2] != null ? (BigDecimal) row[2] : BigDecimal.ZERO;
+            totalOrders += count;
+            totalRevenue = totalRevenue.add(sum);
+            byStatus.put(status.name(), count);
+        }
+        // ensure all statuses are present (even if 0)
+        Arrays.stream(OrderStatus.values())
+              .filter(s -> !byStatus.containsKey(s.name()))
+              .forEach(s -> byStatus.put(s.name(), 0L));
+
+        return new OrderSummaryDto(period, totalOrders, totalRevenue, byStatus);
+    }
+
+    public List<OrderDto> searchOrders(String q) {
+        if (q == null || q.isBlank()) {
+            return orderRepo.findTop20ByOrderByCreatedAtDesc()
+                .stream().map(OrderDto::from).toList();
+        }
+        // Try matching a status name
+        for (OrderStatus s : OrderStatus.values()) {
+            if (s.name().equalsIgnoreCase(q.trim())) {
+                return orderRepo.findByStatusOrderByCreatedAtDesc(s)
+                    .stream().map(OrderDto::from).toList();
+            }
+        }
+        // Try matching a numeric ID
+        try {
+            Long id = Long.parseLong(q.trim());
+            return orderRepo.findById(id).map(OrderDto::from)
+                .map(List::of).orElse(List.of());
+        } catch (NumberFormatException ignored) {
+            // fall through
+        }
+        // Default: recent 20
+        return orderRepo.findTop20ByOrderByCreatedAtDesc()
+            .stream().map(OrderDto::from).toList();
     }
 
     private Order findById(Long id) {
