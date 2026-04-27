@@ -60,8 +60,8 @@ eureka:
     prefer-ip-address: true
     lease-renewal-interval-in-seconds: 10
 
-jwt:
-  public-key: ${JWT_PUBLIC_KEY:test-placeholder}
+keycloak:
+  jwks-uri: ${KEYCLOAK_JWKS_URI:http://localhost:8180/realms/ecommerce/protocol/openid-connect/certs}
 
 management:
   endpoints:
@@ -94,8 +94,8 @@ spring:
       host: localhost
       port: 6379
 
-jwt:
-  public-key: test-placeholder
+keycloak:
+  jwks-uri: http://localhost:8180/realms/ecommerce/protocol/openid-connect/certs
 
 eureka:
   client:

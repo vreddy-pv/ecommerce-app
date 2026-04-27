@@ -1,23 +1,37 @@
 import axios from 'axios'
+import keycloak from '../keycloak'
 
 const client = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
 })
 
-client.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken')
-  if (token) config.headers.Authorization = `Bearer ${token}`
+/**
+ * Request interceptor — attach a valid Keycloak Bearer token to every request.
+ * updateToken(30) refreshes the token if it expires in less than 30 seconds.
+ */
+client.interceptors.request.use(async (config) => {
+  try {
+    await keycloak.updateToken(30)
+    if (keycloak.token) {
+      config.headers.Authorization = `Bearer ${keycloak.token}`
+    }
+  } catch {
+    // Token refresh failed — redirect to Keycloak login
+    keycloak.login()
+  }
   return config
 })
 
+/**
+ * Response interceptor — on 401 force re-login via Keycloak.
+ * This handles cases where the gateway rejects an expired token before updateToken fires.
+ */
 client.interceptors.response.use(
   (res) => res,
-  async (error) => {
+  (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
-      window.location.href = '/login'
+      keycloak.login()
     }
     return Promise.reject(error)
   }

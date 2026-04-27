@@ -23,8 +23,8 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "user_id", nullable = false)
-    private Long userId;
+    @Column(name = "user_id", nullable = false, length = 36)
+    private String userId;   // Keycloak UUID sub (e.g. "550e8400-e29b-41d4-a716-446655440000")
 
     @Column(name = "idempotency_key", unique = true, nullable = false)
     private String idempotencyKey;

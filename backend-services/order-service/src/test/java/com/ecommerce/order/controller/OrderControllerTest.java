@@ -33,8 +33,10 @@ class OrderControllerTest {
     @Autowired private ObjectMapper objectMapper;
     @MockBean  private OrderService orderService;
 
+    private static final String USER_UUID = "550e8400-e29b-41d4-a716-446655440042";
+
     private OrderDto sampleOrderDto() {
-        return new OrderDto(1L, 42L, OrderStatus.PENDING, new BigDecimal("59.98"),
+        return new OrderDto(1L, USER_UUID, OrderStatus.PENDING, new BigDecimal("59.98"),
             Instant.now(), Instant.now(), List.of());
     }
 
@@ -58,7 +60,7 @@ class OrderControllerTest {
 
     @Test
     void createOrderReturns202OnSuccess() throws Exception {
-        when(orderService.createOrder(anyLong(), any(), any())).thenReturn(sampleOrderDto());
+        when(orderService.createOrder(anyString(), any(), any())).thenReturn(sampleOrderDto());
 
         var req = new CreateOrderRequest(
             List.of(new CreateOrderRequest.LineItem(100L, 2, new BigDecimal("29.99"))));
@@ -97,7 +99,7 @@ class OrderControllerTest {
 
     @Test
     void cancelOrderReturns200() throws Exception {
-        OrderDto cancelled = new OrderDto(1L, 42L, OrderStatus.CANCELLED, new BigDecimal("59.98"),
+        OrderDto cancelled = new OrderDto(1L, USER_UUID, OrderStatus.CANCELLED, new BigDecimal("59.98"),
             Instant.now(), Instant.now(), List.of());
         when(orderService.cancelOrder(1L)).thenReturn(cancelled);
 
@@ -118,10 +120,10 @@ class OrderControllerTest {
 
     @Test
     void getUserOrdersReturns200() throws Exception {
-        when(orderService.getOrdersByUser(42L)).thenReturn(List.of(sampleOrderDto()));
+        when(orderService.getOrdersByUser(USER_UUID)).thenReturn(List.of(sampleOrderDto()));
 
-        mockMvc.perform(get("/api/orders").header("X-User-Id", "42"))
+        mockMvc.perform(get("/api/orders").header("X-User-Id", USER_UUID))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data[0].userId").value(42));
+            .andExpect(jsonPath("$.data[0].userId").value(USER_UUID));
     }
 }

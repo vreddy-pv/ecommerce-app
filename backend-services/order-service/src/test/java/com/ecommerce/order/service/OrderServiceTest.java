@@ -33,6 +33,10 @@ class OrderServiceTest {
     @Mock private OutboxEventRepository outboxRepo;
     @InjectMocks private OrderService orderService;
 
+    // Keycloak UUIDs (sub claim) used as userId
+    private static final String USER_UUID   = "550e8400-e29b-41d4-a716-446655440042";
+    private static final String USER_UUID_1 = "550e8400-e29b-41d4-a716-446655440001";
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
@@ -63,10 +67,10 @@ class OrderServiceTest {
         });
         when(outboxRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        OrderDto result = orderService.createOrder(42L, "key-001", sampleRequest());
+        OrderDto result = orderService.createOrder(USER_UUID, "key-001", sampleRequest());
 
         assertThat(result.status()).isEqualTo(OrderStatus.PENDING);
-        assertThat(result.userId()).isEqualTo(42L);
+        assertThat(result.userId()).isEqualTo(USER_UUID);
         assertThat(result.totalAmount()).isEqualByComparingTo("59.98");
 
         verify(outboxRepo).save(argThat(e -> "order.created".equals(e.getEventType())));
@@ -75,12 +79,12 @@ class OrderServiceTest {
     @Test
     void createOrderIsIdempotentForDuplicateKey() {
         Order existing = Order.builder()
-            .id(5L).userId(42L).idempotencyKey("key-001")
+            .id(5L).userId(USER_UUID).idempotencyKey("key-001")
             .status(OrderStatus.PENDING).totalAmount(new BigDecimal("59.98"))
             .build();
         when(orderRepo.findByIdempotencyKey("key-001")).thenReturn(Optional.of(existing));
 
-        OrderDto result = orderService.createOrder(42L, "key-001", sampleRequest());
+        OrderDto result = orderService.createOrder(USER_UUID, "key-001", sampleRequest());
 
         assertThat(result.id()).isEqualTo(5L);
         verify(orderRepo, never()).save(any());
@@ -98,7 +102,7 @@ class OrderServiceTest {
             new CreateOrderRequest.LineItem(200L, 1, new BigDecimal("25.00"))
         ));
 
-        OrderDto result = orderService.createOrder(1L, "key-002", req);
+        OrderDto result = orderService.createOrder(USER_UUID_1, "key-002", req);
 
         assertThat(result.totalAmount()).isEqualByComparingTo("55.00");
     }
@@ -108,7 +112,7 @@ class OrderServiceTest {
     @Test
     void cancelPendingOrderSucceeds() {
         Order order = Order.builder()
-            .id(1L).userId(1L).idempotencyKey("k")
+            .id(1L).userId(USER_UUID_1).idempotencyKey("k")
             .status(OrderStatus.PENDING).totalAmount(BigDecimal.TEN)
             .build();
         when(orderRepo.findById(1L)).thenReturn(Optional.of(order));
@@ -124,7 +128,7 @@ class OrderServiceTest {
     @Test
     void cancelShippedOrderThrows() {
         Order order = Order.builder()
-            .id(1L).userId(1L).idempotencyKey("k")
+            .id(1L).userId(USER_UUID_1).idempotencyKey("k")
             .status(OrderStatus.SHIPPED).totalAmount(BigDecimal.TEN)
             .build();
         when(orderRepo.findById(1L)).thenReturn(Optional.of(order));
@@ -136,7 +140,7 @@ class OrderServiceTest {
     @Test
     void cancelDeliveredOrderThrows() {
         Order order = Order.builder()
-            .id(2L).userId(1L).idempotencyKey("k2")
+            .id(2L).userId(USER_UUID_1).idempotencyKey("k2")
             .status(OrderStatus.DELIVERED).totalAmount(BigDecimal.TEN)
             .build();
         when(orderRepo.findById(2L)).thenReturn(Optional.of(order));
@@ -150,7 +154,7 @@ class OrderServiceTest {
     @Test
     void pendingCanTransitionToConfirmed() {
         Order order = Order.builder()
-            .id(1L).userId(1L).idempotencyKey("k")
+            .id(1L).userId(USER_UUID_1).idempotencyKey("k")
             .status(OrderStatus.PENDING).totalAmount(BigDecimal.TEN)
             .build();
         when(orderRepo.findById(1L)).thenReturn(Optional.of(order));
@@ -164,7 +168,7 @@ class OrderServiceTest {
     @Test
     void deliveredCannotTransitionBackToPending() {
         Order order = Order.builder()
-            .id(1L).userId(1L).idempotencyKey("k")
+            .id(1L).userId(USER_UUID_1).idempotencyKey("k")
             .status(OrderStatus.DELIVERED).totalAmount(BigDecimal.TEN)
             .build();
         when(orderRepo.findById(1L)).thenReturn(Optional.of(order));
@@ -196,7 +200,7 @@ class OrderServiceTest {
         });
         when(outboxRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        orderService.createOrder(42L, "key-x", sampleRequest());
+        orderService.createOrder(USER_UUID, "key-x", sampleRequest());
 
         ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
         verify(outboxRepo).save(captor.capture());

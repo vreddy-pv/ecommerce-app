@@ -1,16 +1,13 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
 
 export default function Navbar() {
   const { isAuthenticated, user, logout } = useAuth()
   const { totalItems } = useCart()
-  const navigate = useNavigate()
 
-  const handleLogout = async () => {
-    await logout()
-    navigate('/login')
-  }
+  // Keycloak logout redirects the browser to Keycloak and then back to the app root.
+  const handleLogout = () => logout()
 
   return (
     <nav style={{ display: 'flex', alignItems: 'center', padding: '12px 24px', background: '#1a73e8', color: '#fff', gap: 16 }}>

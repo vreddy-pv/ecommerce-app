@@ -39,13 +39,13 @@ public class OrderService {
         return OrderDto.from(findById(id));
     }
 
-    public List<OrderDto> getOrdersByUser(Long userId) {
+    public List<OrderDto> getOrdersByUser(String userId) {
         return orderRepo.findByUserIdOrderByCreatedAtDesc(userId)
             .stream().map(OrderDto::from).toList();
     }
 
     @Transactional
-    public OrderDto createOrder(Long userId, String idempotencyKey, CreateOrderRequest req) {
+    public OrderDto createOrder(String userId, String idempotencyKey, CreateOrderRequest req) {
         return orderRepo.findByIdempotencyKey(idempotencyKey)
             .map(OrderDto::from)
             .orElseGet(() -> {
@@ -72,7 +72,7 @@ public class OrderService {
         orderRepo.save(order);
     }
 
-    private Order buildOrder(Long userId, String idempotencyKey, CreateOrderRequest req) {
+    private Order buildOrder(String userId, String idempotencyKey, CreateOrderRequest req) {
         BigDecimal total = req.items().stream()
             .map(li -> li.unitPrice().multiply(BigDecimal.valueOf(li.quantity())))
             .reduce(BigDecimal.ZERO, BigDecimal::add);

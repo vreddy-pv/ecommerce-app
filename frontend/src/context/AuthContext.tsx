@@ -1,57 +1,92 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
-import * as authApi from '../api/auth'
-import type { AuthResponse } from '../types'
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  type ReactNode,
+} from 'react'
+import keycloak from '../keycloak'
+
+interface AuthUser {
+  username: string
+  role: string
+  userId: string
+}
 
 interface AuthState {
-  user: { username: string; role: string } | null
+  user: AuthUser | null
   isAuthenticated: boolean
 }
 
 interface AuthContextValue extends AuthState {
-  login: (username: string, password: string) => Promise<void>
-  register: (username: string, email: string, password: string) => Promise<void>
-  logout: () => Promise<void>
+  /** Redirect to Keycloak login page (Authorization Code + PKCE). */
+  login: () => void
+  /** Logout from Keycloak and clear local state. */
+  logout: () => void
+  /** Returns a valid access token, refreshing if < 30s remaining. */
+  getToken: () => Promise<string>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+function parseUser(parsed: Record<string, unknown>): AuthUser {
+  const roles = (parsed.realm_access as { roles?: string[] })?.roles ?? []
+  return {
+    username: (parsed.preferred_username as string) ?? (parsed.sub as string),
+    role: roles.includes('admin') ? 'ADMIN' : 'USER',
+    userId: parsed.sub as string,
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>(() => {
-    const token = localStorage.getItem('accessToken')
-    const username = localStorage.getItem('username')
-    const role = localStorage.getItem('role')
-    return token && username && role
-      ? { user: { username, role }, isAuthenticated: true }
-      : { user: null, isAuthenticated: false }
+    // Keycloak is already initialized by main.tsx — read its current auth state
+    if (keycloak.authenticated && keycloak.tokenParsed) {
+      return {
+        isAuthenticated: true,
+        user: parseUser(keycloak.tokenParsed as Record<string, unknown>),
+      }
+    }
+    return { isAuthenticated: false, user: null }
   })
 
-  const storeAuth = (res: AuthResponse) => {
-    localStorage.setItem('accessToken', res.accessToken)
-    localStorage.setItem('refreshToken', res.refreshToken)
-    localStorage.setItem('username', res.username)
-    localStorage.setItem('role', res.role)
-    setState({ user: { username: res.username, role: res.role }, isAuthenticated: true })
-  }
+  useEffect(() => {
+    // Sync if Keycloak authenticated asynchronously after component mount
+    if (keycloak.authenticated && keycloak.tokenParsed && !state.isAuthenticated) {
+      setState({
+        isAuthenticated: true,
+        user: parseUser(keycloak.tokenParsed as Record<string, unknown>),
+      })
+    }
 
-  const login = useCallback(async (username: string, password: string) => {
-    const res = await authApi.login(username, password)
-    storeAuth(res)
+    // Keep user info in sync after auto token refresh
+    keycloak.onAuthRefreshSuccess = () => {
+      if (keycloak.tokenParsed) {
+        setState((prev) => ({
+          ...prev,
+          user: parseUser(keycloak.tokenParsed as Record<string, unknown>),
+        }))
+      }
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const login = useCallback(() => {
+    keycloak.login()
   }, [])
 
-  const register = useCallback(async (username: string, email: string, password: string) => {
-    const res = await authApi.register(username, email, password)
-    storeAuth(res)
+  const logout = useCallback(() => {
+    keycloak.logout({ redirectUri: window.location.origin })
   }, [])
 
-  const logout = useCallback(async () => {
-    const refreshToken = localStorage.getItem('refreshToken') ?? ''
-    await authApi.logout(refreshToken).catch(() => {})
-    localStorage.clear()
-    setState({ user: null, isAuthenticated: false })
+  const getToken = useCallback(async (): Promise<string> => {
+    // Refresh if less than 30 seconds until expiry
+    await keycloak.updateToken(30)
+    return keycloak.token!
   }, [])
 
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout }}>
+    <AuthContext.Provider value={{ ...state, login, logout, getToken }}>
       {children}
     </AuthContext.Provider>
   )
