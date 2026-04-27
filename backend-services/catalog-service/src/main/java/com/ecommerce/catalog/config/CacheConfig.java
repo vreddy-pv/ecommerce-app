@@ -1,5 +1,6 @@
 package com.ecommerce.catalog.config;
 
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import org.springframework.cache.annotation.EnableCaching;
@@ -23,9 +24,12 @@ public class CacheConfig {
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
         ObjectMapper mapper = new ObjectMapper();
         mapper.findAndRegisterModules();
+        // EVERYTHING (not NON_FINAL) so that records/final classes also get @class
+        // PROPERTY (not default WRAPPER_ARRAY) so type is embedded as @class field
         mapper.activateDefaultTyping(
             BasicPolymorphicTypeValidator.builder().allowIfSubType(Object.class).build(),
-            ObjectMapper.DefaultTyping.NON_FINAL
+            ObjectMapper.DefaultTyping.EVERYTHING,
+            JsonTypeInfo.As.PROPERTY
         );
 
         var jsonSerializer = new GenericJackson2JsonRedisSerializer(mapper);
