@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "ecommerce": {
+      "command": "C:\\Veera\\AI\\agents\\microservices\\python-services\\mcp-server\\.venv\\Scripts\\python.exe",
+      "args": ["-u", "-m", "app.mcp_server"],
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "C:\\Veera\\AI\\agents\\microservices\\python-services\\mcp-server",
+        "GATEWAY_URL": "http://localhost:8080",
+        "KEYCLOAK_URL": "http://localhost:8180",
+        "KEYCLOAK_REALM": "ecommerce",
+        "MCP_CLIENT_ID": "mcp-server",
+        "MCP_CLIENT_SECRET": "changeme-mcp-secret"
+      }
+    }
+  }
+}

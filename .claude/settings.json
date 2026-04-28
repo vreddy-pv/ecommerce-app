@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"\nconst p = process.env.TOOL_INPUT_FILE_PATH || '';\nconst svcMap = {\n  'backend-services/api-gateway':          'api-gateway',\n  'backend-services/catalog-service':       'catalog-service',\n  'backend-services/inventory-service':     'inventory-service',\n  'backend-services/order-service':         'order-service',\n  'backend-services/order-processing':      'order-processing-service',\n  'backend-services/user-service':          'user-service',\n  'backend-services/aggregator-service':    'aggregator-service',\n  'backend-services/discovery-service':     'discovery-service',\n  'python-services/mcp-server':             'mcp-server',\n  'python-services/notification-service':   'notification-service',\n  'frontend':                               'frontend',\n  'infrastructure/keycloak':                'keycloak',\n  'docker-compose.yml':                     'ALL'\n};\nconst match = Object.entries(svcMap).find(([k]) => p.replace(/\\\\\\\\/g,'/').includes(k));\nif (match) {\n  const svc = match[1];\n  if (svc === 'ALL') {\n    console.log('\\n💡 docker-compose.yml changed — restart affected services:\\n   docker-compose up -d');\n  } else {\n    console.log('\\n💡 ' + svc + ' source changed — rebuild to apply:\\n   docker-compose up -d --build ' + svc);\n  }\n}\n\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /c/Veera/AI/agents/microservices && git status --short 2>/dev/null | head -20 | awk 'NR==1{print \"\\n📋 Uncommitted changes:\"} {print \"  \" $0} END{if(NR==0) print \"\\n✅ Working tree clean — nothing to commit\"}'"
+          }
+        ]
+      }
+    ]
+  }
+}
