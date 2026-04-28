@@ -29,12 +29,6 @@ eureka:
     prefer-ip-address: true
     lease-renewal-interval-in-seconds: 10
 
-jwt:
-  private-key: ${JWT_PRIVATE_KEY:test-key-placeholder}
-  public-key: ${JWT_PUBLIC_KEY:test-key-placeholder}
-  access-token-expiry-ms: 900000    # 15 minutes
-  refresh-token-expiry-ms: 604800000 # 7 days
-
 management:
   endpoints:
     web:
@@ -71,6 +65,4 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
-jwt:
-  private-key: test-placeholder
-  public-key: test-placeholder
+

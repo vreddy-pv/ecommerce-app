@@ -23,7 +23,7 @@ public class User {
     @Column(unique = true, nullable = false, length = 100)
     private String email;
 
-    @Column(name = "password_hash", nullable = false)
+    @Column(name = "password_hash")          // nullable — Google users have no password
     private String passwordHash;
 
     @Enumerated(EnumType.STRING)
@@ -49,4 +49,19 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private Instant createdAt = Instant.now();
+
+    // ── Legacy OAuth fields (kept for DB compatibility; auth is now via Keycloak) ──
+
+    /** Auth provider identifier — legacy column, retained for DB compatibility. */
+    @Column(name = "auth_provider", nullable = false, length = 20)
+    @Builder.Default
+    private String authProvider = "KEYCLOAK";
+
+    /** Google subject — legacy column, no longer populated. */
+    @Column(name = "google_sub", unique = true, length = 100)
+    private String googleSub;
+
+    /** Avatar URL — legacy column, retained for future profile features. */
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
 }

@@ -5,10 +5,15 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 
+/**
+ * User-service security configuration.
+ *
+ * Authentication is now handled entirely by Keycloak + API Gateway.
+ * The gateway validates Keycloak JWTs and forwards user context as X-User-* headers.
+ * User-service trusts these headers — all requests arriving here have already been authenticated.
+ */
 @Configuration
 public class SecurityConfig {
 
@@ -18,15 +23,9 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                .anyRequest().authenticated()
+                .anyRequest().permitAll()  // gateway enforces auth; service trusts X-User-* headers
             )
             .build();
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 }

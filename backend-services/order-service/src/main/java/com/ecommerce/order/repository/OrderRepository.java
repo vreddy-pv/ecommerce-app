@@ -12,7 +12,7 @@ import java.util.Optional;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
     Optional<Order> findByIdempotencyKey(String idempotencyKey);
-    List<Order> findByUserIdOrderByCreatedAtDesc(Long userId);
+    List<Order> findByUserIdOrderByCreatedAtDesc(String userId);
 
     /** Admin summary: [status, count, sum] rows for orders created since the given instant. */
     @Query("SELECT o.status, COUNT(o), SUM(o.totalAmount) FROM Order o WHERE o.createdAt >= :since GROUP BY o.status")

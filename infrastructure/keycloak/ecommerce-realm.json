@@ -1,0 +1,80 @@
+{
+  "realm": "ecommerce",
+  "enabled": true,
+  "registrationAllowed": true,
+  "loginWithEmailAllowed": true,
+  "rememberMe": true,
+  "verifyEmail": false,
+  "resetPasswordAllowed": true,
+  "accessTokenLifespan": 900,
+  "ssoSessionMaxLifespan": 604800,
+  "roles": {
+    "realm": [
+      { "name": "user",  "description": "Regular customer" },
+      { "name": "admin", "description": "Store administrator" }
+    ]
+  },
+  "defaultRole": {
+    "name": "default-roles-ecommerce",
+    "composite": true,
+    "composites": {
+      "realm": ["user"]
+    }
+  },
+  "clients": [
+    {
+      "clientId": "ecommerce-frontend",
+      "name": "E-Commerce Frontend",
+      "description": "React SPA — Authorization Code + PKCE",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://localhost"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "mcp-server",
+      "name": "MCP Server (service account)",
+      "description": "Claude MCP integration — Client Credentials grant",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "changeme-mcp-secret"
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "firstName": "Admin",
+      "lastName": "User",
+      "email": "admin@ecommerce.local",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["admin", "user"]
+    },
+    {
+      "username": "service-account-mcp-server",
+      "serviceAccountClientId": "mcp-server",
+      "enabled": true,
+      "realmRoles": ["admin"]
+    }
+  ]
+}

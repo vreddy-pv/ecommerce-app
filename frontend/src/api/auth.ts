@@ -1,15 +1,11 @@
-import client from './client'
-import type { ApiResponse, AuthResponse } from '../types'
+/**
+ * Auth API module — superseded by Keycloak.
+ *
+ * Authentication is now handled entirely by Keycloak (Authorization Code + PKCE).
+ * The keycloak-js adapter in keycloak.ts and AuthContext.tsx replaces all token management.
+ *
+ * This file is kept as a placeholder. The /api/auth/* endpoints on the backend
+ * are no longer called by the frontend — Keycloak's token endpoint is used instead.
+ */
 
-export const login = (username: string, password: string) =>
-  client
-    .post<ApiResponse<AuthResponse>>('/auth/login', { username, password })
-    .then((r) => r.data.data)
-
-export const register = (username: string, email: string, password: string) =>
-  client
-    .post<ApiResponse<AuthResponse>>('/auth/register', { username, email, password })
-    .then((r) => r.data.data)
-
-export const logout = (refreshToken: string) =>
-  client.post('/auth/logout', { refreshToken })
+// No exports needed — Keycloak handles all auth flows.

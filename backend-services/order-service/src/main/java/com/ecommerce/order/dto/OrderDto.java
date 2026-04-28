@@ -9,7 +9,7 @@ import java.util.List;
 
 public record OrderDto(
     Long id,
-    Long userId,
+    String userId,
     OrderStatus status,
     BigDecimal totalAmount,
     Instant createdAt,
