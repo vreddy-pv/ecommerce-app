@@ -422,8 +422,15 @@ services:
       INVENTORY_SERVICE_URL: http://inventory-service:8084
       ORDER_SERVICE_URL: http://order-service:8085
       USER_SERVICE_URL: http://user-service:8082
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-admin}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASS:-changeme}
+      ANALYTICS_ENABLED: ${ANALYTICS_ENABLED:-true}
     depends_on:
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       catalog-service:
         condition: service_healthy
@@ -435,6 +442,39 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── Analytics Service ────────────────────────────────────────────────────────
+  analytics-service:
+    build:
+      context: ./backend-services
+      dockerfile: analytics-service/Dockerfile
+    container_name: ecommerce-analytics
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+    ports:
+      - "8086:8086"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${DB_USERNAME:-app_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-changeme}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health | grep -q UP || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5

@@ -7,6 +7,7 @@ CREATE DATABASE inventory_db;
 CREATE DATABASE orders_db;
 CREATE DATABASE processing_db;
 CREATE DATABASE notification_db;
+CREATE DATABASE analytics_db;
 
 -- Grant all privileges to the app user on each database
 GRANT ALL PRIVILEGES ON DATABASE user_db         TO app_user;
@@ -15,3 +16,4 @@ GRANT ALL PRIVILEGES ON DATABASE inventory_db    TO app_user;
 GRANT ALL PRIVILEGES ON DATABASE orders_db       TO app_user;
 GRANT ALL PRIVILEGES ON DATABASE processing_db   TO app_user;
 GRANT ALL PRIVILEGES ON DATABASE notification_db TO app_user;
+GRANT ALL PRIVILEGES ON DATABASE analytics_db    TO app_user;

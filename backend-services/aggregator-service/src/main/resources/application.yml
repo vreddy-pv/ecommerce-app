@@ -1,6 +1,11 @@
 server:
   port: 8081
 
+# Analytics & Recommendations Feature Toggle
+# Set ANALYTICS_ENABLED=false in production to disable recommendations without breaking existing app
+analytics:
+  enabled: ${ANALYTICS_ENABLED:true}
+
 spring:
   application:
     name: aggregator-service
@@ -9,6 +14,11 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       database: 0
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASS:guest}
 
 eureka:
   client:

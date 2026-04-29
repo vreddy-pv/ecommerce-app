@@ -14,6 +14,13 @@
       "type": "direct",
       "durable": true,
       "auto_delete": false
+    },
+    {
+      "name": "user-activity.exchange",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false
     }
   ],
   "queues": [
@@ -66,6 +73,36 @@
       "vhost": "/",
       "durable": true,
       "auto_delete": false
+    },
+    {
+      "name": "user-activity.search.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 604800000,
+        "x-expires": 2592000000
+      }
+    },
+    {
+      "name": "user-activity.view.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 604800000,
+        "x-expires": 2592000000
+      }
+    },
+    {
+      "name": "user-activity.feedback.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 2592000000,
+        "x-expires": 7776000000
+      }
     }
   ],
   "bindings": [
@@ -124,6 +161,27 @@
       "destination": "order.created.dead.queue",
       "destination_type": "queue",
       "routing_key": "order.created.dead"
+    },
+    {
+      "source": "user-activity.exchange",
+      "vhost": "/",
+      "destination": "user-activity.search.queue",
+      "destination_type": "queue",
+      "routing_key": "user.search"
+    },
+    {
+      "source": "user-activity.exchange",
+      "vhost": "/",
+      "destination": "user-activity.view.queue",
+      "destination_type": "queue",
+      "routing_key": "user.product.viewed"
+    },
+    {
+      "source": "user-activity.exchange",
+      "vhost": "/",
+      "destination": "user-activity.feedback.queue",
+      "destination_type": "queue",
+      "routing_key": "recommendation.feedback"
     }
   ]
 }

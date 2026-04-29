@@ -27,6 +27,7 @@
         <module>order-service</module>
         <module>order-processing-service</module>
         <module>aggregator-service</module>
+        <module>analytics-service</module>
     </modules>
 
     <properties>
