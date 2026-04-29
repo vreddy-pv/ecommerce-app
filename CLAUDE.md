@@ -15,7 +15,7 @@ Browser/Mobile
 [API Gateway :8080]  ←── validates Keycloak JWT via JWKS endpoint
       │                   injects X-User-Id, X-User-Name, X-User-Role headers
       ▼
-[Aggregator :8081]
+[Aggregator :8081]  ←─── publishes events to RabbitMQ (analytics)
       │
       ┌───────────────────────────────────────────────────────────┐
       ▼           ▼             ▼            ▼            ▼        ▼
@@ -24,6 +24,14 @@ Browser/Mobile
               │                                  :8086]
          [Object Cache]                    ↕ heartbeats
          [Session Cache]
+              │
+              ▼
+      [Analytics :8086]  ←─── consumes RabbitMQ events (search, views, feedback)
+              │
+              ▼
+      [analytics_db]       ←─── event persistence
+
+[RabbitMQ :5672]          ←─── message broker (event-driven pipeline)
 [MCP Server :8090] (Python) ←── Claude AI integration
 ```
 
@@ -81,6 +89,7 @@ docker-compose ps
 | Inventory Service | 8084 | http://localhost:8084 |
 | Order Service | 8085 | http://localhost:8085 |
 | Order Processing | 8086 | http://localhost:8086 |
+| Analytics Service | 8086 | http://localhost:8086 |
 | Notification Service | 8087 | http://localhost:8087 |
 | MCP Server | 8090 | http://localhost:8090 |
 | **Keycloak** | **8180** | **http://localhost:8180** |
@@ -195,6 +204,124 @@ File: `.mcp.json` (at project root — already committed)
 cd C:\Veera\AI\agents\microservices
 claude    # .mcp.json is auto-loaded; type /mcp to verify
 ```
+
+---
+
+## Analytics Pipeline (Event-Driven)
+
+The analytics service captures user activity events (searches, product views, recommendation feedback) via an asynchronous, fire-and-forget RabbitMQ pipeline.
+
+### Enable/Disable Analytics
+```yaml
+# In docker-compose.yml or runtime environment:
+ANALYTICS_ENABLED: "true"   # Default; set to "false" to disable entirely
+```
+When disabled, analytics events are silently dropped (no impact on order processing or core functionality).
+
+### Event Flow
+```
+Frontend/UI
+    │
+    ├─ POST /api/analytics/search-event           (Aggregator :8081)
+    │   {searchQuery, resultCount, clickedProductId}
+    │
+    ├─ POST /api/analytics/product-view-event     (Aggregator :8081)
+    │   {productId, sessionId, durationSeconds, source}
+    │
+    └─ POST /api/recommendations/feedback         (Aggregator :8081)
+       {productId, recommendationId, action, orderId}
+           │
+           ▼
+    RabbitMQ (user-activity.exchange)
+           │
+    ┌──────┼──────┐
+    ▼      ▼      ▼
+   [search] [view] [feedback] queues
+    │      │      │
+    └──────┼──────┘
+           ▼
+    Analytics Service (:8086)
+    @RabbitListener consumers
+           │
+           ▼
+    analytics_db (PostgreSQL)
+    ├─ user_search_events
+    ├─ product_view_events
+    ├─ recommendation_feedback_events
+    ├─ product_attributes
+    └─ recommendation_experiments
+```
+
+### Analytics Endpoints
+
+**POST /api/analytics/search-event** (Aggregator)
+```bash
+curl -X POST http://localhost:8081/api/analytics/search-event \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: user-123" \
+  -d '{
+    "searchQuery": "summer wedding dress",
+    "resultCount": 12,
+    "clickedProductId": null  # optional
+  }'
+# Returns: 202 ACCEPTED
+```
+
+**POST /api/analytics/product-view-event** (Aggregator)
+```bash
+curl -X POST http://localhost:8081/api/analytics/product-view-event \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: user-456" \
+  -d '{
+    "productId": 42,
+    "sessionId": "sess-xyz",
+    "durationSeconds": 45,
+    "source": "search"  # or "category_browse", "recommendation", "direct"
+  }'
+# Returns: 202 ACCEPTED
+```
+
+### Querying Analytics Data
+
+```bash
+# Connect to analytics_db
+docker exec -e PGPASSWORD=changeme ecommerce-postgres psql -U app_user -d analytics_db
+
+# Recent search events
+SELECT user_id, search_query, result_count, clicked_product_id 
+FROM user_search_events 
+ORDER BY created_at DESC LIMIT 10;
+
+# Product view sessions
+SELECT user_id, product_id, session_id, duration_seconds, source
+FROM product_view_events
+ORDER BY created_at DESC LIMIT 10;
+
+# Event counts by date
+SELECT DATE(created_at) as date, COUNT(*) as event_count
+FROM user_search_events
+GROUP BY DATE(created_at)
+ORDER BY date DESC;
+```
+
+### Debugging Analytics Issues
+
+**No events appearing in database?**
+```bash
+# 1. Check RabbitMQ queue depth
+curl -s -u admin:changeme http://localhost:15672/api/queues/%2F \
+  | jq '.[] | {name, messages}'
+
+# 2. Check Analytics service logs
+docker logs ecommerce-analytics | grep -i "error\|listener\|search"
+
+# 3. Verify exchange/bindings exist
+curl -s -u admin:changeme http://localhost:15672/api/exchanges/%2F \
+  | jq '.[] | select(.name | contains("activity"))'
+```
+
+**Analytics disabled but events still publishing?**
+The `ANALYTICS_ENABLED` flag only affects the Aggregator service. If true, events are published to RabbitMQ. If false, the `AnalyticsEventService` bean is not instantiated, so publishing is skipped silently.
 
 ---
 
@@ -370,4 +497,5 @@ postgresql://app_user:changeme@localhost:5432/{service}_db
 | order-service | orders_db |
 | order-processing-service | processing_db |
 | notification-service | notification_db |
+| analytics-service | analytics_db |
 | Keycloak | keycloak_db (isolated, managed by Keycloak) |
