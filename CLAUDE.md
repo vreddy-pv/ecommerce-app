@@ -26,7 +26,7 @@ Browser/Mobile
          [Session Cache]
               │
               ▼
-      [Analytics :8086]  ←─── consumes RabbitMQ events (search, views, feedback)
+      [Analytics :8088]  ←─── consumes RabbitMQ events (search, views, feedback)
               │
               ▼
       [analytics_db]       ←─── event persistence
@@ -89,7 +89,7 @@ docker-compose ps
 | Inventory Service | 8084 | http://localhost:8084 |
 | Order Service | 8085 | http://localhost:8085 |
 | Order Processing | 8086 | http://localhost:8086 |
-| Analytics Service | 8086 | http://localhost:8086 |
+| Analytics Service | 8088 | http://localhost:8088 |
 | Notification Service | 8087 | http://localhost:8087 |
 | MCP Server | 8090 | http://localhost:8090 |
 | **Keycloak** | **8180** | **http://localhost:8180** |
@@ -209,7 +209,7 @@ claude    # .mcp.json is auto-loaded; type /mcp to verify
 
 ## Analytics Pipeline (Event-Driven)
 
-The analytics service captures user activity events (searches, product views, recommendation feedback) via an asynchronous, fire-and-forget RabbitMQ pipeline.
+The analytics service captures user activity events (searches and product views) via an asynchronous, fire-and-forget RabbitMQ pipeline.
 
 ### Enable/Disable Analytics
 ```yaml
@@ -225,31 +225,25 @@ Frontend/UI
     ├─ POST /api/analytics/search-event           (Aggregator :8081)
     │   {searchQuery, resultCount, clickedProductId}
     │
-    ├─ POST /api/analytics/product-view-event     (Aggregator :8081)
-    │   {productId, sessionId, durationSeconds, source}
-    │
-    └─ POST /api/recommendations/feedback         (Aggregator :8081)
-       {productId, recommendationId, action, orderId}
+    └─ POST /api/analytics/product-view-event     (Aggregator :8081)
+       {productId, sessionId, durationSeconds, source}
            │
            ▼
     RabbitMQ (user-activity.exchange)
            │
-    ┌──────┼──────┐
-    ▼      ▼      ▼
-   [search] [view] [feedback] queues
-    │      │      │
-    └──────┼──────┘
+    ┌──────┴──────┐
+    ▼             ▼
+   [search]     [view]  queues
+    │             │
+    └──────┬──────┘
            ▼
-    Analytics Service (:8086)
+    Analytics Service (:8088)
     @RabbitListener consumers
            │
            ▼
     analytics_db (PostgreSQL)
     ├─ user_search_events
-    ├─ product_view_events
-    ├─ recommendation_feedback_events
-    ├─ product_attributes
-    └─ recommendation_experiments
+    └─ product_view_events
 ```
 
 ### Analytics Endpoints
@@ -445,6 +439,9 @@ Invoke-RestMethod -Uri "http://localhost:8080/api/orders" `
 
 ### Service registered in Eureka but returns 404
 The API Gateway routes all requests through `/api/{service-name}/...`. Verify the route prefix in `api-gateway/src/main/resources/application.yml`. Check Eureka dashboard at http://localhost:8761.
+
+### analytics-service and order-processing-service both fail to start
+Both services were originally configured on port 8086, causing a host-port conflict. `analytics-service` has been moved to port **8088**. If you see a bind error on startup, verify `docker-compose.yml` maps `analytics-service` to `"8088:8088"` and that `analytics-service/src/main/resources/application.yml` sets `server.port: 8088`.
 
 ### Keycloak takes too long to start
 Normal on first start (~60-90 seconds for DB init + realm import). Subsequent starts are faster (~30s).
