@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
+import { ThemeSwitcher } from '../context/ThemeContext'
 
 export default function Navbar() {
   const { isAuthenticated, user, logout } = useAuth()
@@ -22,6 +23,7 @@ export default function Navbar() {
       <Link to="/cart" style={{ color: '#fff', textDecoration: 'none' }}>
         Cart {totalItems > 0 && <span data-testid="cart-count">({totalItems})</span>}
       </Link>
+      <ThemeSwitcher />
       {isAuthenticated ? (
         <>
           <span style={{ fontSize: 14 }}>Hi, {user?.username}</span>

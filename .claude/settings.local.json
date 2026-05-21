@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Veera\\\\AI\\\\agents\\\\microservices\" -Force)",
+      "Bash(Select-Object -Property Name, FullName)",
+      "Bash(Sort-Object Name)",
+      "Bash(git -C c:/Veera/AI/agents/microservices status)",
+      "Bash(git -C c:/Veera/AI/agents/microservices log --oneline -5)",
+      "Bash(git -C c:/Veera/AI/agents/microservices diff)",
+      "Bash(git -C c:/Veera/AI/agents/microservices add CLAUDE.md README.md docs/ backend-services/analytics-service/src/main/resources/application.yml docker-compose.yml)"
+    ]
+  }
+}

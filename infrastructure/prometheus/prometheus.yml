@@ -1,0 +1,160 @@
+# Prometheus Configuration for E-Commerce Microservices
+
+global:
+  scrape_interval: 15s           # Default: scrape metrics every 15 seconds
+  evaluation_interval: 15s       # Default: evaluate rules every 15 seconds
+  external_labels:
+    monitor: 'ecommerce-monitor'
+    environment: 'docker'
+
+# Alertmanager configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Load rules once and periodically evaluate them
+rule_files:
+  # - "alert_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+
+  # ── Prometheus Self-Monitoring ────────────────────────────────────────────
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ── API Gateway (Spring Boot Actuator) ────────────────────────────────────
+  - job_name: 'api-gateway'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    static_configs:
+      - targets: ['api-gateway:8080']
+        labels:
+          instance: 'api-gateway'
+          service: 'gateway'
+
+  # ── Discovery Service (Eureka Server) ────────────────────────────────────
+  - job_name: 'discovery-service'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['discovery-service:8761']
+        labels:
+          instance: 'discovery-service'
+          service: 'discovery'
+
+  # ── User Service ──────────────────────────────────────────────────────────
+  - job_name: 'user-service'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['user-service:8082']
+        labels:
+          instance: 'user-service'
+          service: 'user'
+
+  # ── Catalog Service ───────────────────────────────────────────────────────
+  - job_name: 'catalog-service'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['catalog-service:8083']
+        labels:
+          instance: 'catalog-service'
+          service: 'catalog'
+
+  # ── Inventory Service ─────────────────────────────────────────────────────
+  - job_name: 'inventory-service'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['inventory-service:8084']
+        labels:
+          instance: 'inventory-service'
+          service: 'inventory'
+
+  # ── Order Service ─────────────────────────────────────────────────────────
+  - job_name: 'order-service'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['order-service:8085']
+        labels:
+          instance: 'order-service'
+          service: 'order'
+
+  # ── Order Processing Service ──────────────────────────────────────────────
+  - job_name: 'order-processing-service'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['order-processing-service:8086']
+        labels:
+          instance: 'order-processing-service'
+          service: 'order-processing'
+
+  # ── Aggregator Service ────────────────────────────────────────────────────
+  - job_name: 'aggregator-service'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['aggregator-service:8081']
+        labels:
+          instance: 'aggregator-service'
+          service: 'aggregator'
+
+  # ── Analytics Service ─────────────────────────────────────────────────────
+  - job_name: 'analytics-service'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['analytics-service:8088']
+        labels:
+          instance: 'analytics-service'
+          service: 'analytics'
+
+  # ── Notification Service (Python FastAPI) ────────────────────────────────
+  - job_name: 'notification-service'
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['notification-service:8087']
+        labels:
+          instance: 'notification-service'
+          service: 'notification'
+
+  # ── MCP Server (Python FastAPI + Claude Agent) ───────────────────────────
+  - job_name: 'mcp-server'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['mcp-server:8090']
+        labels:
+          instance: 'mcp-server'
+          service: 'mcp'
+
+  # ── PostgreSQL Database (via postgres_exporter - optional) ───────────────
+  # Uncomment if you add postgres_exporter container
+  # - job_name: 'postgres'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']
+  #       labels:
+  #         instance: 'postgres'
+
+  # ── Redis (via redis_exporter - optional) ─────────────────────────────────
+  # Uncomment if you add redis_exporter container
+  # - job_name: 'redis'
+  #   static_configs:
+  #     - targets: ['redis-exporter:9121']
+  #       labels:
+  #         instance: 'redis'
+
+  # ── RabbitMQ Management API (optional) ─────────────────────────────────────
+  # - job_name: 'rabbitmq'
+  #   static_configs:
+  #     - targets: ['rabbitmq:15672']
+  #       labels:
+  #         instance: 'rabbitmq'
